@@ -12,6 +12,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 import hashlib
+import json
+import os
 import time
 
 import gspread
@@ -83,7 +85,12 @@ def check_password_hash(hash, password):
 def _gspread_client():
     global _client
     if _client is None:
-        _client = gspread.service_account(filename=GOOGLE_SERVICE_ACCOUNT_FILE)
+        creds_json = os.getenv("GOOGLE_CREDENTIALS_JSON")
+        if creds_json:
+            creds_dict = json.loads(creds_json)
+            _client = gspread.service_account_from_dict(creds_dict)
+        else:
+            _client = gspread.service_account(filename=GOOGLE_SERVICE_ACCOUNT_FILE)
     return _client
 
 
