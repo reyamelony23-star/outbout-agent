@@ -79,25 +79,33 @@ def dashboard():
 def prospects():
     scope = _scope_email()
     rows = sheets.list_prospects(owner_email=scope)
-    return render_template("prospects.html", prospects=rows[::-1], page="prospects")
+    return render_template(
+        "prospects.html",
+        prospects=rows[::-1],
+        page="prospects",
+        campaign_filter=None,
+    )
 
 
 @main_bp.route("/campaigns")
 @login_required
 def campaigns():
     scope = _scope_email()
-    rows = sheets.list_prospects(owner_email=scope)
-    by_query: dict[str, dict] = {}
-    for r in rows:
-        q = r.get("Search Query") or "(no query)"
-        bucket = by_query.setdefault(q, {"query": q, "total": 0, "contacted": 0, "decks": 0})
-        bucket["total"] += 1
-        if str(r.get("Status", "")).lower() in {"contacted", "replied"}:
-            bucket["contacted"] += 1
-        if r.get("Deck Generated"):
-            bucket["decks"] += 1
+    items = sheets.list_campaigns(owner_email=scope)
+    items.sort(key=lambda c: (c.get("date") or "", c.get("name") or ""), reverse=True)
+    return render_template("campaigns.html", campaigns=items, page="campaigns")
+
+
+@main_bp.route("/campaigns/<path:name>")
+@login_required
+def campaign_detail(name: str):
+    scope = _scope_email()
+    rows = sheets.list_prospects(owner_email=scope, campaign=name)
     return render_template(
-        "campaigns.html", campaigns=sorted(by_query.values(), key=lambda c: -c["total"]), page="campaigns"
+        "prospects.html",
+        prospects=rows[::-1],
+        page="campaigns",
+        campaign_filter=name,
     )
 
 

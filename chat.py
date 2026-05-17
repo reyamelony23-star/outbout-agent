@@ -84,10 +84,11 @@ def _claude() -> anthropic.Anthropic:
 
 def _do_search(query: str, owner_email: str) -> str:
     prospects = scrape_prospects(query, max_results=DEFAULT_MAX_RESULTS)
-    added, skipped = sheets.append_prospects(prospects, owner_email=owner_email)
+    added, skipped, campaign = sheets.append_prospects(prospects, owner_email=owner_email)
     return (
-        f"Searched Google Maps for '{query}'. Added {added} new prospect(s) to the sheet "
-        f"({skipped} duplicate(s) skipped, {len(prospects)} total returned by Apify)."
+        f"Searched Google Maps for '{query}'. Added {added} new prospect(s) to "
+        f"campaign '{campaign}' ({skipped} duplicate(s) skipped, "
+        f"{len(prospects)} total returned by Apify)."
     )
 
 

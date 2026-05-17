@@ -1,16 +1,26 @@
 {% extends "base.html" %}
-{% block title %}Prospects — Moiboo{% endblock %}
+{% block title %}{% if campaign_filter %}{{ campaign_filter }} — Moiboo{% else %}Prospects — Moiboo{% endif %}{% endblock %}
 {% block content %}
 <header class="page-header">
   <div>
-    <h1>Prospects</h1>
-    <p class="page-sub">{{ prospects|length }} record(s){% if not current_user.is_admin %} in your campaigns{% endif %}.</p>
+    <h1>{% if campaign_filter %}{{ campaign_filter }}{% else %}Prospects{% endif %}</h1>
+    <p class="page-sub">{{ prospects|length }} record(s){% if campaign_filter %} in this campaign{% elif not current_user.is_admin %} in your campaigns{% endif %}.</p>
   </div>
 </header>
 
-<form id="search-form" class="search-bar">
+{% if campaign_filter %}
+<div class="campaign-banner">
+  <span>Viewing campaign <strong>{{ campaign_filter }}</strong></span>
+  <a class="link" href="{{ url_for('main.campaigns') }}">← All campaigns</a>
+</div>
+{% endif %}
+
+<form id="search-form" class="search-bar" {% if campaign_filter %}data-campaign="{{ campaign_filter }}"{% endif %}>
   <span class="search-icon">⌕</span>
   <input id="search-input" type="text" name="query" placeholder="Find prospects in… (e.g. ‘yoga studios in Bali’)" autocomplete="off" required>
+  <select id="campaign-select" class="campaign-select" aria-label="Campaign">
+    <option value="">+ New campaign</option>
+  </select>
   <button type="submit" class="btn btn-primary">✦ Run Search</button>
 </form>
 

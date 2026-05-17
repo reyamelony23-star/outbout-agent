@@ -2,14 +2,17 @@
 
 Tabs:
     Users:     Email | Password Hash | Role | Name | Created At
-    Prospects: Business Name | Address | Phone | Website | Email | Rating |
-               Review Count | Lead Score | Search Query | Status |
-               Deck Generated | Deck Generated At | WhatsApp Sent |
-               Last Contacted | Owner Email | Notes
+    Prospects: master tab — every prospect ever scraped, plus a Campaign
+               column that points back to the per-campaign tab.
+    <Campaign tab>: one tab per search campaign (e.g. "Workshops Jurong - 17
+               May"). Holds the same columns as Prospects. Written on search
+               for the in-Sheets organised view; the master Prospects tab is
+               the source of truth for action updates (deck/whatsapp/status).
 """
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 
 import hashlib
@@ -47,6 +50,7 @@ PROSPECTS_HEADERS = [
     "Last Contacted",
     "Owner Email",
     "Notes",
+    "Campaign",
 ]
 
 _client = None
@@ -57,6 +61,9 @@ PROSPECTS_CACHE_TTL = 60
 USERS_CACHE_TTL = 300
 
 _cache: dict[str, tuple[float, object]] = {}
+
+_INVALID_TAB_CHARS = re.compile(r"[\\/?*:\[\]]")
+_RESERVED_TABS = {USERS_TAB, PROSPECTS_TAB}
 
 
 def _cache_get(key: str, ttl: float):
@@ -121,12 +128,24 @@ def _get_or_create_tab(name: str, headers: list[str]):
     return ws
 
 
+def _ensure_headers_match(ws, headers: list[str]) -> None:
+    """Add any missing trailing headers to an existing tab (one-shot migration)."""
+    current = ws.row_values(1)
+    if current == headers:
+        return
+    for idx, name in enumerate(headers, start=1):
+        if idx > len(current) or current[idx - 1] != name:
+            ws.update_cell(1, idx, name)
+
+
 def users_tab():
     return _get_or_create_tab(USERS_TAB, USERS_HEADERS)
 
 
 def prospects_tab():
-    return _get_or_create_tab(PROSPECTS_TAB, PROSPECTS_HEADERS)
+    ws = _get_or_create_tab(PROSPECTS_TAB, PROSPECTS_HEADERS)
+    _ensure_headers_match(ws, PROSPECTS_HEADERS)
+    return ws
 
 
 def ensure_bootstrap():
@@ -195,7 +214,25 @@ def create_user(email: str, password: str, role: str = "client", name: str = "")
     _cache_invalidate("users")
 
 
-def list_prospects(owner_email: str | None = None) -> list[dict]:
+def slugify_campaign(query: str, when: datetime | None = None) -> str:
+    """Build a Google-Sheets-safe campaign tab name from a query + date.
+
+    "automotive workshops jurong" -> "Automotive Workshops Jurong - 17 May"
+    """
+    when = when or datetime.now()
+    title = " ".join(w.capitalize() for w in query.split())
+    title = _INVALID_TAB_CHARS.sub("", title).strip()
+    if not title:
+        title = "Untitled"
+    day = str(when.day)
+    month = when.strftime("%b")
+    name = f"{title} - {day} {month}"
+    if name in _RESERVED_TABS:
+        name = f"{name} (campaign)"
+    return name[:100]
+
+
+def list_prospects(owner_email: str | None = None, campaign: str | None = None) -> list[dict]:
     all_rows = _cache_get("prospects", PROSPECTS_CACHE_TTL)
     if all_rows is None:
         try:
@@ -210,10 +247,14 @@ def list_prospects(owner_email: str | None = None) -> list[dict]:
             print(f"[sheets] list_prospects failed: {e}")
             stale = _cache.get("prospects")
             all_rows = stale[1] if stale is not None else []
-    if not owner_email:
-        return list(all_rows)
-    target = owner_email.strip().lower()
-    return [r for r in all_rows if str(r.get("Owner Email", "")).strip().lower() == target]
+    result = list(all_rows)
+    if owner_email:
+        target = owner_email.strip().lower()
+        result = [r for r in result if str(r.get("Owner Email", "")).strip().lower() == target]
+    if campaign is not None:
+        target = campaign.strip()
+        result = [r for r in result if str(r.get("Campaign", "")).strip() == target]
+    return result
 
 
 def find_prospect_by_name(name: str, owner_email: str | None = None) -> dict | None:
@@ -232,9 +273,48 @@ def existing_prospect_names(owner_email: str | None = None) -> set[str]:
     }
 
 
-def append_prospects(prospects: list[dict], owner_email: str) -> tuple[int, int]:
-    """Append new prospect dicts. Returns (added, skipped_dupes)."""
-    ws = prospects_tab()
+def _row_for(p: dict, owner_email: str, campaign: str) -> list:
+    return [
+        (p.get("name") or "").strip(),
+        p.get("address", ""),
+        p.get("phone", ""),
+        p.get("website", ""),
+        p.get("email", ""),
+        p.get("rating", ""),
+        p.get("review_count", 0),
+        p.get("lead_score", 0),
+        p.get("query", ""),
+        "New",
+        "",
+        "",
+        "",
+        "",
+        owner_email,
+        "",
+        campaign,
+    ]
+
+
+def append_prospects(
+    prospects: list[dict],
+    owner_email: str,
+    campaign_name: str | None = None,
+) -> tuple[int, int, str]:
+    """Append new prospect dicts to the master tab + campaign tab.
+
+    Returns (added, skipped_dupes, campaign_name).
+    """
+    if not prospects:
+        return 0, 0, campaign_name or ""
+
+    if not campaign_name:
+        query = (prospects[0].get("query") or "Untitled").strip()
+        campaign_name = slugify_campaign(query)
+    campaign_name = campaign_name.strip()[:100]
+
+    ws_master = prospects_tab()
+    ws_campaign = _get_or_create_tab(campaign_name, PROSPECTS_HEADERS)
+
     seen = existing_prospect_names()
     added = 0
     skipped = 0
@@ -245,31 +325,16 @@ def append_prospects(prospects: list[dict], owner_email: str) -> tuple[int, int]
             skipped += 1
             continue
         seen.add(name.lower())
-        rows_to_add.append(
-            [
-                name,
-                p.get("address", ""),
-                p.get("phone", ""),
-                p.get("website", ""),
-                p.get("email", ""),
-                p.get("rating", ""),
-                p.get("review_count", 0),
-                p.get("lead_score", 0),
-                p.get("query", ""),
-                "New",
-                "",
-                "",
-                "",
-                "",
-                owner_email,
-                "",
-            ]
-        )
+        rows_to_add.append(_row_for(p, owner_email, campaign_name))
         added += 1
+
     if rows_to_add:
-        ws.append_rows(rows_to_add, value_input_option="USER_ENTERED")
+        ws_master.append_rows(rows_to_add, value_input_option="USER_ENTERED")
+        if ws_campaign.id != ws_master.id:
+            ws_campaign.append_rows(rows_to_add, value_input_option="USER_ENTERED")
         _cache_invalidate("prospects")
-    return added, skipped
+
+    return added, skipped, campaign_name
 
 
 def update_prospect(row_index: int, fields: dict) -> None:
@@ -287,6 +352,40 @@ def update_prospect(row_index: int, fields: dict) -> None:
     if updates:
         ws.batch_update(updates, value_input_option="USER_ENTERED")
         _cache_invalidate("prospects")
+
+
+def list_campaigns(owner_email: str | None = None) -> list[dict]:
+    """Aggregate the master Prospects tab into per-campaign stats."""
+    rows = list_prospects(owner_email=owner_email)
+    by_campaign: dict[str, dict] = {}
+    for r in rows:
+        name = str(r.get("Campaign") or "").strip()
+        if not name:
+            name = "(uncategorized)"
+        bucket = by_campaign.setdefault(
+            name,
+            {
+                "name": name,
+                "query": str(r.get("Search Query") or "").strip(),
+                "date": "",
+                "prospects": 0,
+                "decks": 0,
+                "whatsapp_sent": 0,
+                "contacted": 0,
+            },
+        )
+        bucket["prospects"] += 1
+        if r.get("Deck Generated"):
+            bucket["decks"] += 1
+        if (r.get("WhatsApp Sent") or "").strip():
+            bucket["whatsapp_sent"] += 1
+            bucket["contacted"] += 1
+        last = (r.get("WhatsApp Sent") or r.get("Deck Generated At") or "").strip()
+        if last and last > bucket["date"]:
+            bucket["date"] = last
+        if not bucket["query"]:
+            bucket["query"] = str(r.get("Search Query") or "").strip()
+    return list(by_campaign.values())
 
 
 def stats(owner_email: str | None = None) -> dict:

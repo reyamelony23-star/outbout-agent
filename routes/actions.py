@@ -36,15 +36,42 @@ def _scope_email():
 def search():
     payload = request.get_json(silent=True) or request.form
     query = (payload.get("query") or "").strip()
+    campaign_name = (payload.get("campaign_name") or "").strip() or None
     if not query:
         return jsonify({"ok": False, "error": "query is required"}), 400
     try:
         prospects = scrape_prospects(query, max_results=DEFAULT_MAX_RESULTS)
     except Exception as e:
         return jsonify({"ok": False, "error": f"scraper failed: {e}"}), 500
-    added, skipped = sheets.append_prospects(prospects, owner_email=current_user.email)
+    added, skipped, campaign = sheets.append_prospects(
+        prospects, owner_email=current_user.email, campaign_name=campaign_name
+    )
     return jsonify(
-        {"ok": True, "added": added, "skipped": skipped, "total_seen": len(prospects)}
+        {
+            "ok": True,
+            "added": added,
+            "skipped": skipped,
+            "total_seen": len(prospects),
+            "campaign": campaign,
+        }
+    )
+
+
+@actions_bp.route("/api/campaigns", methods=["GET"])
+@login_required
+def api_campaigns():
+    scope = _scope_email()
+    items = sheets.list_campaigns(owner_email=scope)
+    items.sort(key=lambda c: (c.get("date") or "", c.get("name") or ""), reverse=True)
+    return jsonify(
+        {
+            "ok": True,
+            "campaigns": [
+                {"name": c["name"], "query": c.get("query", ""), "prospects": c["prospects"]}
+                for c in items
+                if c["name"] != "(uncategorized)"
+            ],
+        }
     )
 
 

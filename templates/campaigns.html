@@ -4,38 +4,40 @@
 <header class="page-header">
   <div>
     <h1>Campaigns</h1>
-    <p class="page-sub">Pipelines grouped by search query.</p>
+    <p class="page-sub">{{ campaigns|length }} campaign(s). Each campaign is its own tab in Google Sheets.</p>
   </div>
 </header>
 
-<section class="panel">
+<section>
   {% if campaigns %}
-  <table class="data-table">
-    <thead>
-      <tr><th>Query</th><th>Prospects</th><th>Contacted</th><th>Decks</th><th>Progress</th></tr>
-    </thead>
-    <tbody>
-      {% for c in campaigns %}
-      <tr>
-        <td>
-          <div class="cell-business">
-            <div class="avatar-initials avatar-c{{ (loop.index0 % 6) + 1 }}">{{ (c.query or '?')[0]|upper }}</div>
-            <div class="cell-business-name">{{ c.query }}</div>
-          </div>
-        </td>
-        <td>{{ c.total }}</td>
-        <td>{{ c.contacted }}</td>
-        <td>{{ c.decks }}</td>
-        <td>
-          {% set pct = (c.contacted / c.total * 100) | round(0, 'floor') if c.total else 0 %}
-          <span class="badge {% if pct >= 50 %}badge-done{% elif pct > 0 %}badge-warn{% else %}badge-info{% endif %}">{{ pct }}% contacted</span>
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <div class="deck-grid">
+    {% for c in campaigns %}
+    <div class="deck-card campaign-card" data-campaign="{{ c.name }}" data-query="{{ c.query }}">
+      <div class="deck-card-head">
+        <div class="avatar-initials avatar-c{{ (loop.index0 % 6) + 1 }}">{{ (c.name or '?')[0]|upper }}</div>
+        <div style="min-width:0; flex:1;">
+          <h3 class="deck-card-title">{{ c.name }}</h3>
+          <div class="deck-card-meta">{% if c.query %}{{ c.query }}{% else %}—{% endif %}{% if c.date %} · last activity {{ c.date }}{% endif %}</div>
+        </div>
+      </div>
+      <div class="campaign-stats">
+        <div class="campaign-stat"><span class="campaign-stat-value">{{ c.prospects }}</span><span class="campaign-stat-label">Prospects</span></div>
+        <div class="campaign-stat"><span class="campaign-stat-value">{{ c.decks }}</span><span class="campaign-stat-label">Decks</span></div>
+        <div class="campaign-stat"><span class="campaign-stat-value">{{ c.whatsapp_sent }}</span><span class="campaign-stat-label">WhatsApp</span></div>
+      </div>
+      <div class="deck-card-actions">
+        <a class="btn btn-primary btn-sm" href="{{ url_for('main.campaign_detail', name=c.name) }}">Open →</a>
+        {% if c.query %}
+        <button class="btn btn-ghost btn-sm js-run-again" type="button">↻ Run Again</button>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
   {% else %}
-  <p class="empty">No campaigns yet. Run a search from the dashboard.</p>
+  <div class="panel">
+    <p class="empty">No campaigns yet. Run a search from the dashboard or Prospects page.</p>
+  </div>
   {% endif %}
 </section>
 {% endblock %}
