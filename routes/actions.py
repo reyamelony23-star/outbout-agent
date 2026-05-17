@@ -83,11 +83,12 @@ def send_outreach_route(row: int):
         if not prospect:
             return jsonify({"ok": False, "error": "prospect not found"}), 404
 
-        raw_phone = (prospect.get("Phone") or "").strip()
-        if not raw_phone:
+        phone = str(prospect.get("Phone", "") or "")
+        phone = phone.strip().replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
+        if not phone:
             return jsonify({"ok": False, "error": "no phone number on file"}), 400
 
-        phone = re.sub(r"\D", "", raw_phone)
+        phone = re.sub(r"\D", "", phone)
         if len(phone) == 8 and phone[0] in ("6", "8", "9"):
             phone = "65" + phone
         if not phone:
