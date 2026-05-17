@@ -20,6 +20,7 @@ ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
 CLAUDE_MODEL = "claude-opus-4-7"
 
 DECK_OUTPUT_DIR = os.getenv("DECK_OUTPUT_DIR", "decks")
+PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "https://app.reyamelony.me").rstrip("/")
 
 APIFY_ACTOR_ID = "compass/crawler-google-places"
 DEFAULT_MAX_RESULTS = 20

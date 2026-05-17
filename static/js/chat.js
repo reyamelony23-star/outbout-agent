@@ -42,6 +42,32 @@
     return node;
   }
 
+  function appendBotWithWhatsAppLinks(text, items) {
+    const node = document.createElement('div');
+    node.className = 'chat-msg chat-msg-bot';
+    let cleaned = text;
+    items.forEach((it) => {
+      if (it.link) cleaned = cleaned.split(it.link).join('');
+    });
+    const p = document.createElement('div');
+    p.textContent = cleaned.replace(/\s+$/, '');
+    node.appendChild(p);
+    items.forEach((it) => {
+      if (!it.link) return;
+      const link = document.createElement('a');
+      link.href = it.link;
+      link.target = '_blank';
+      link.rel = 'noopener';
+      link.style.display = 'block';
+      link.style.marginTop = '6px';
+      link.textContent = '↗ Open WhatsApp' + (it.business_name ? ' · ' + it.business_name : '');
+      node.appendChild(link);
+    });
+    messages.appendChild(node);
+    messages.scrollTop = messages.scrollHeight;
+    return node;
+  }
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const text = input.value.trim();
@@ -60,10 +86,12 @@
       if (data.ok) {
         if (data.deck && data.deck.view_url) {
           appendBotWithDeckLink(data.reply, data.deck);
+        } else if (data.whatsapp && data.whatsapp.length) {
+          appendBotWithWhatsAppLinks(data.reply, data.whatsapp);
         } else {
           appendMessage(data.reply, 'bot');
         }
-        if (data.action && data.action !== 'generate_deck') {
+        if (data.action && data.action !== 'generate_deck' && data.action !== 'send_outreach') {
           appendMessage('(action: ' + data.action + ') — refresh the page to see updates.', 'system');
         }
       } else {

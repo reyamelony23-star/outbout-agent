@@ -11,7 +11,7 @@ import anthropic
 import sheets
 from config import ANTHROPIC_API_KEY, CHAT_OUTREACH_CAP, CLAUDE_MODEL, DEFAULT_MAX_RESULTS
 from deck_generator import generate_deck
-from outreach import compose_email, send_email
+from outreach import build_whatsapp_link
 from scraper import scrape_prospects
 
 CHAT_SYSTEM_PROMPT = """You are the outbound sales operations assistant for a B2B agency.
@@ -59,9 +59,10 @@ TOOLS = [
     {
         "name": "send_outreach",
         "description": (
-            "Send personalized outreach emails. Pass a specific business name to email one "
-            "prospect, or the literal string 'all_new' to email up to a few prospects whose "
-            "status is still 'New'."
+            "Generate a WhatsApp outreach link (wa.me) for a prospect with a pre-written "
+            "message including their deck. Pass a specific business name for one prospect, "
+            "or the literal string 'all_new' to generate links for up to a few prospects "
+            "whose status is still 'New'."
         ),
         "input_schema": {
             "type": "object",
@@ -95,7 +96,15 @@ def _do_generate_deck(business_name: str, owner_email: str | None) -> dict:
     if not prospect:
         return {"reply": f"Couldn't find a prospect named '{business_name}' in the sheet."}
     url = generate_deck(prospect)
-    sheets.update_prospect(prospect["_row"], {"Deck Generated": url})
+    from datetime import datetime, timezone
+
+    sheets.update_prospect(
+        prospect["_row"],
+        {
+            "Deck Generated": url,
+            "Deck Generated At": datetime.now(timezone.utc).date().isoformat(),
+        },
+    )
     import os as _os
 
     filename = _os.path.basename(url)
@@ -109,45 +118,77 @@ def _do_generate_deck(business_name: str, owner_email: str | None) -> dict:
     }
 
 
-def _send_one(prospect: dict, sender_name: str) -> tuple[bool, str]:
-    to = (prospect.get("Email") or "").strip()
-    if not to:
-        return False, f"{prospect['Business Name']}: no email on file"
-    subject, body = compose_email(prospect, sender_name=sender_name)
-    ok, msg = send_email(to, subject, body)
-    if ok:
-        from datetime import datetime, timezone
+def _whatsapp_one(prospect: dict) -> dict:
+    """Build a wa.me link for one prospect and log it in the sheet.
 
-        sheets.update_prospect(
-            prospect["_row"],
-            {
-                "Status": "Contacted",
-                "Last Contacted": datetime.now(timezone.utc).date().isoformat(),
-            },
-        )
-        return True, f"{prospect['Business Name']}: sent to {to}"
-    return False, f"{prospect['Business Name']}: {msg}"
+    Returns dict with keys: ok, business_name, link, message, note.
+    """
+    from datetime import datetime, timezone
+
+    business_name = prospect.get("Business Name", "")
+    phone = (prospect.get("Phone") or "").strip()
+    if not phone:
+        return {
+            "ok": False,
+            "business_name": business_name,
+            "link": "",
+            "message": "",
+            "note": f"{business_name}: no phone on file",
+        }
+    deck_url = (prospect.get("Deck Generated") or "").strip()
+    link, message = build_whatsapp_link(prospect, deck_url=deck_url)
+    sheets.update_prospect(
+        prospect["_row"],
+        {
+            "Status": "Contacted",
+            "WhatsApp Sent": datetime.now(timezone.utc).date().isoformat(),
+            "Last Contacted": datetime.now(timezone.utc).date().isoformat(),
+        },
+    )
+    return {
+        "ok": True,
+        "business_name": business_name,
+        "link": link,
+        "message": message,
+        "note": f"{business_name}: WhatsApp link ready",
+    }
 
 
-def _do_outreach(target: str, owner_email: str | None, sender_name: str) -> str:
+def _do_outreach(target: str, owner_email: str | None, sender_name: str) -> dict:
     if target.strip().lower() == "all_new":
         candidates = [
             p
             for p in sheets.list_prospects(owner_email=owner_email)
             if str(p.get("Status", "")).strip().lower() in {"", "new"}
-            and (p.get("Email") or "").strip()
+            and (p.get("Phone") or "").strip()
         ][:CHAT_OUTREACH_CAP]
         if not candidates:
-            return "No 'New' prospects with an email address on file."
-        results = [_send_one(p, sender_name) for p in candidates]
-        sent = sum(1 for ok, _ in results if ok)
-        lines = "; ".join(msg for _, msg in results)
-        return f"Sent {sent} of {len(results)} outreach email(s) (cap {CHAT_OUTREACH_CAP}). {lines}"
+            return {"reply": "No 'New' prospects with a phone number on file."}
+        results = [_whatsapp_one(p) for p in candidates]
+        whatsapp = [
+            {"business_name": r["business_name"], "link": r["link"]}
+            for r in results
+            if r["ok"] and r["link"]
+        ]
+        lines = "; ".join(r["note"] for r in results)
+        return {
+            "reply": (
+                f"Generated {len(whatsapp)} WhatsApp link(s) (cap {CHAT_OUTREACH_CAP}). {lines}"
+            ),
+            "whatsapp": whatsapp,
+        }
     prospect = sheets.find_prospect_by_name(target, owner_email=owner_email)
     if not prospect:
-        return f"Couldn't find a prospect named '{target}'."
-    ok, msg = _send_one(prospect, sender_name)
-    return msg
+        return {"reply": f"Couldn't find a prospect named '{target}'."}
+    result = _whatsapp_one(prospect)
+    if not result["ok"]:
+        return {"reply": result["note"]}
+    return {
+        "reply": f"WhatsApp link ready for {result['business_name']}: {result['link']}",
+        "whatsapp": [
+            {"business_name": result["business_name"], "link": result["link"]}
+        ],
+    }
 
 
 def handle_chat(message: str, owner_email: str | None, sender_name: str, is_admin: bool) -> dict:
@@ -175,6 +216,7 @@ def handle_chat(message: str, owner_email: str | None, sender_name: str, is_admi
         name = tool_block.name
         args = tool_block.input or {}
         deck_payload = None
+        whatsapp_payload = None
         try:
             if name == "search_prospects":
                 reply = _do_search(args["query"], owner_email=owner_email or "admin")
@@ -183,7 +225,9 @@ def handle_chat(message: str, owner_email: str | None, sender_name: str, is_admi
                 reply = result["reply"]
                 deck_payload = result.get("deck")
             elif name == "send_outreach":
-                reply = _do_outreach(args["target"], owner_email=scope, sender_name=sender_name)
+                result = _do_outreach(args["target"], owner_email=scope, sender_name=sender_name)
+                reply = result["reply"]
+                whatsapp_payload = result.get("whatsapp")
             else:
                 reply = f"Unknown tool: {name}"
         except Exception as e:
@@ -191,6 +235,8 @@ def handle_chat(message: str, owner_email: str | None, sender_name: str, is_admi
         out = {"reply": reply, "action": name}
         if deck_payload:
             out["deck"] = deck_payload
+        if whatsapp_payload:
+            out["whatsapp"] = whatsapp_payload
         return out
 
     text = "".join(b.text for b in response.content if b.type == "text").strip()

@@ -18,7 +18,7 @@ from pathlib import Path
 
 import anthropic
 
-from config import ANTHROPIC_API_KEY, DECK_OUTPUT_DIR
+from config import ANTHROPIC_API_KEY, DECK_OUTPUT_DIR, PUBLIC_BASE_URL
 
 DECK_CLAUDE_MODEL = "claude-sonnet-4-6"
 
@@ -509,8 +509,7 @@ def _render_html(business_name: str, content: dict) -> str:
 def generate_deck(prospect: dict, content: dict | None = None) -> str:
     """Build a personalised HTML pitch deck for a prospect.
 
-    Returns the URL route (e.g. '/decks/Carro_Care_proposal.html') that
-    the Flask app serves the HTML file from.
+    Returns the full public URL (e.g. 'https://app.reyamelony.me/decks/Carro_Care_proposal.html').
     """
     if content is None:
         content = generate_deck_content(prospect)
@@ -524,4 +523,4 @@ def generate_deck(prospect: dict, content: dict | None = None) -> str:
 
     out_path.write_text(_render_html(business_name, content), encoding="utf-8")
 
-    return f"/decks/{filename}"
+    return f"{PUBLIC_BASE_URL}/decks/{filename}"

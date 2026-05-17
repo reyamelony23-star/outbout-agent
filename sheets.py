@@ -4,7 +4,8 @@ Tabs:
     Users:     Email | Password Hash | Role | Name | Created At
     Prospects: Business Name | Address | Phone | Website | Email | Rating |
                Review Count | Lead Score | Search Query | Status |
-               Deck Generated | Last Contacted | Owner Email | Notes
+               Deck Generated | Deck Generated At | WhatsApp Sent |
+               Last Contacted | Owner Email | Notes
 """
 
 from __future__ import annotations
@@ -41,6 +42,8 @@ PROSPECTS_HEADERS = [
     "Search Query",
     "Status",
     "Deck Generated",
+    "Deck Generated At",
+    "WhatsApp Sent",
     "Last Contacted",
     "Owner Email",
     "Notes",
@@ -251,6 +254,8 @@ def append_prospects(prospects: list[dict], owner_email: str) -> tuple[int, int]
                 "New",
                 "",
                 "",
+                "",
+                "",
                 owner_email,
                 "",
             ]
@@ -282,13 +287,13 @@ def update_prospect(row_index: int, fields: dict) -> None:
 def stats(owner_email: str | None = None) -> dict:
     rows = list_prospects(owner_email=owner_email)
     total = len(rows)
-    emails_sent = sum(1 for r in rows if str(r.get("Status", "")).lower() in {"contacted", "replied"})
+    whatsapp_sent = sum(1 for r in rows if (r.get("WhatsApp Sent") or "").strip())
     decks_generated = sum(1 for r in rows if r.get("Deck Generated"))
     replied = sum(1 for r in rows if str(r.get("Status", "")).lower() == "replied")
-    response_rate = (replied / emails_sent * 100) if emails_sent else 0.0
+    response_rate = (replied / whatsapp_sent * 100) if whatsapp_sent else 0.0
     return {
         "total_prospects": total,
-        "emails_sent": emails_sent,
+        "emails_sent": whatsapp_sent,
         "decks_generated": decks_generated,
         "response_rate": round(response_rate, 1),
     }

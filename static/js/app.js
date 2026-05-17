@@ -74,8 +74,20 @@
   bindRowAction(
     '.js-send-outreach',
     (rowId) => `/send-outreach/${rowId}`,
-    (row) => {
-      row.querySelector('.cell-outreach').innerHTML = '<span class="badge badge-done">Sent</span>';
+    (row, data) => {
+      if (data.whatsapp_link) {
+        window.open(data.whatsapp_link, '_blank', 'noopener');
+      }
+      const cell = row.querySelector('.cell-outreach');
+      cell.innerHTML = '';
+      const link = document.createElement('a');
+      link.href = data.whatsapp_link;
+      link.target = '_blank';
+      link.rel = 'noopener';
+      link.className = 'badge badge-done';
+      link.style.textDecoration = 'none';
+      link.textContent = '↗ Open WhatsApp';
+      cell.appendChild(link);
       const statusCell = row.querySelector('.cell-status');
       if (statusCell) statusCell.innerHTML = '<span class="status status-contacted">Contacted</span>';
     }

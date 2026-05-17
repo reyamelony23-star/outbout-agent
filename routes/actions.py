@@ -18,7 +18,7 @@ import sheets
 from chat import handle_chat
 from config import DEFAULT_MAX_RESULTS
 from deck_generator import generate_deck
-from outreach import compose_email, send_email
+from outreach import build_whatsapp_link
 from scraper import scrape_prospects
 
 actions_bp = Blueprint("actions", __name__)
@@ -64,7 +64,13 @@ def generate_deck_route(row: int):
         url = generate_deck(prospect)
     except Exception as e:
         return jsonify({"ok": False, "error": f"deck generation failed: {e}"}), 500
-    sheets.update_prospect(row, {"Deck Generated": url})
+    sheets.update_prospect(
+        row,
+        {
+            "Deck Generated": url,
+            "Deck Generated At": datetime.now(timezone.utc).date().isoformat(),
+        },
+    )
     return jsonify({"ok": True, "deck_url": url})
 
 
@@ -74,24 +80,22 @@ def send_outreach_route(row: int):
     prospect = _find_row(row)
     if not prospect:
         return jsonify({"ok": False, "error": "prospect not found"}), 404
-    to = (prospect.get("Email") or "").strip()
-    if not to:
-        return jsonify({"ok": False, "error": "no email address on file"}), 400
-    try:
-        subject, body = compose_email(prospect, sender_name=current_user.name.split()[0])
-    except Exception as e:
-        return jsonify({"ok": False, "error": f"copy generation failed: {e}"}), 500
-    ok, msg = send_email(to, subject, body)
-    if not ok:
-        return jsonify({"ok": False, "error": msg}), 500
+    if not (prospect.get("Phone") or "").strip():
+        return jsonify({"ok": False, "error": "no phone number on file"}), 400
+    deck_url = (prospect.get("Deck Generated") or "").strip()
+    link, message = build_whatsapp_link(prospect, deck_url=deck_url)
+    if not link:
+        return jsonify({"ok": False, "error": "could not build WhatsApp link"}), 500
+    today = datetime.now(timezone.utc).date().isoformat()
     sheets.update_prospect(
         row,
         {
             "Status": "Contacted",
-            "Last Contacted": datetime.now(timezone.utc).date().isoformat(),
+            "WhatsApp Sent": today,
+            "Last Contacted": today,
         },
     )
-    return jsonify({"ok": True, "to": to, "subject": subject})
+    return jsonify({"ok": True, "whatsapp_link": link, "message": message})
 
 
 @actions_bp.route("/chat", methods=["POST"])

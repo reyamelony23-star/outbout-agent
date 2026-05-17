@@ -26,7 +26,7 @@
           <th>Rating</th>
           <th>Lead Score</th>
           <th>Deck</th>
-          <th>Outreach</th>
+          <th>WhatsApp</th>
           <th>Status</th>
         </tr>
       </thead>
@@ -56,10 +56,10 @@
             {% endif %}
           </td>
           <td class="cell-outreach">
-            {% if (p['Status']|default('')|lower) in ['contacted','replied'] %}
-              <span class="badge badge-done">✓ Sent</span>
+            {% if p['WhatsApp Sent'] %}
+              <span class="badge badge-done">✓ Sent {{ p['WhatsApp Sent'] }}</span>
             {% else %}
-              <button class="btn btn-ghost btn-sm js-send-outreach">Send Outreach</button>
+              <button class="btn btn-ghost btn-sm js-send-outreach">Send WhatsApp</button>
             {% endif %}
           </td>
           <td class="cell-status"><span class="status status-{{ (p['Status']|default('New'))|lower }}">{{ p['Status'] or 'New' }}</span></td>
