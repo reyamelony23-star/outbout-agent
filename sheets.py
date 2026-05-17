@@ -198,13 +198,18 @@ def create_user(email: str, password: str, role: str = "client", name: str = "")
 def list_prospects(owner_email: str | None = None) -> list[dict]:
     all_rows = _cache_get("prospects", PROSPECTS_CACHE_TTL)
     if all_rows is None:
-        ws = prospects_tab()
-        rows = ws.get_all_records()
-        all_rows = []
-        for i, row in enumerate(rows, start=2):
-            row["_row"] = i
-            all_rows.append(row)
-        _cache_set("prospects", all_rows)
+        try:
+            ws = prospects_tab()
+            rows = ws.get_all_records()
+            all_rows = []
+            for i, row in enumerate(rows, start=2):
+                row["_row"] = i
+                all_rows.append(row)
+            _cache_set("prospects", all_rows)
+        except Exception as e:
+            print(f"[sheets] list_prospects failed: {e}")
+            stale = _cache.get("prospects")
+            all_rows = stale[1] if stale is not None else []
     if not owner_email:
         return list(all_rows)
     target = owner_email.strip().lower()
