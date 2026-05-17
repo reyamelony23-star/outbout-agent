@@ -76,7 +76,10 @@
     (rowId) => `/send-outreach/${rowId}`,
     (row, data) => {
       if (data.whatsapp_url) {
-        window.open(data.whatsapp_url, '_blank', 'noopener');
+        const opened = window.open(data.whatsapp_url, '_blank');
+        if (!opened) {
+          alert('Popup blocked. Open this link manually:\n\n' + data.whatsapp_url);
+        }
       }
       const cell = row.querySelector('.cell-outreach');
       cell.innerHTML = '';
