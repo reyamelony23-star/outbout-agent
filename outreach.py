@@ -7,8 +7,11 @@ from urllib.parse import quote
 
 
 def _normalize_phone(phone: str) -> str:
-    """Strip everything but digits — wa.me wants international format, no '+'."""
-    return re.sub(r"\D", "", phone or "")
+    """Strip everything but digits, then add 65 prefix for bare Singapore mobiles."""
+    digits = re.sub(r"\D", "", phone or "")
+    if len(digits) == 8 and digits[0] in ("6", "8", "9"):
+        digits = "65" + digits
+    return digits
 
 
 def build_whatsapp_link(prospect: dict, deck_url: str = "") -> tuple[str, str]:

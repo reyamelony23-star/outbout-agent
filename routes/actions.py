@@ -9,7 +9,9 @@ Endpoints:
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
+from urllib.parse import quote
 
 from flask import Blueprint, jsonify, request
 from flask_login import current_user, login_required
@@ -18,7 +20,6 @@ import sheets
 from chat import handle_chat
 from config import DEFAULT_MAX_RESULTS
 from deck_generator import generate_deck
-from outreach import build_whatsapp_link
 from scraper import scrape_prospects
 
 actions_bp = Blueprint("actions", __name__)
@@ -77,25 +78,41 @@ def generate_deck_route(row: int):
 @actions_bp.route("/send-outreach/<int:row>", methods=["POST"])
 @login_required
 def send_outreach_route(row: int):
-    prospect = _find_row(row)
-    if not prospect:
-        return jsonify({"ok": False, "error": "prospect not found"}), 404
-    if not (prospect.get("Phone") or "").strip():
-        return jsonify({"ok": False, "error": "no phone number on file"}), 400
-    deck_url = (prospect.get("Deck Generated") or "").strip()
-    link, message = build_whatsapp_link(prospect, deck_url=deck_url)
-    if not link:
-        return jsonify({"ok": False, "error": "could not build WhatsApp link"}), 500
-    today = datetime.now(timezone.utc).date().isoformat()
-    sheets.update_prospect(
-        row,
-        {
-            "Status": "Contacted",
-            "WhatsApp Sent": today,
-            "Last Contacted": today,
-        },
-    )
-    return jsonify({"ok": True, "whatsapp_link": link, "message": message})
+    try:
+        prospect = _find_row(row)
+        if not prospect:
+            return jsonify({"ok": False, "error": "prospect not found"}), 404
+
+        raw_phone = (prospect.get("Phone") or "").strip()
+        if not raw_phone:
+            return jsonify({"ok": False, "error": "no phone number on file"}), 400
+
+        phone = re.sub(r"\D", "", raw_phone)
+        if len(phone) == 8 and phone[0] in ("6", "8", "9"):
+            phone = "65" + phone
+        if not phone:
+            return jsonify({"ok": False, "error": "phone number is empty after cleaning"}), 400
+
+        business_name = (prospect.get("Business Name") or "there").strip()
+        message = (
+            f"Hi {business_name} team! I came across your business and put together "
+            f"a quick digital growth proposal for you. Would you be open to a 15-min "
+            f"call this week? - Reya from Moiboo Marketing"
+        )
+        whatsapp_url = f"https://wa.me/{phone}?text={quote(message)}"
+
+        today = datetime.now(timezone.utc).date().isoformat()
+        sheets.update_prospect(
+            row,
+            {
+                "Status": "Contacted",
+                "WhatsApp Sent": today,
+                "Last Contacted": today,
+            },
+        )
+        return jsonify({"ok": True, "whatsapp_url": whatsapp_url, "message": message})
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"send-outreach failed: {e}"}), 500
 
 
 @actions_bp.route("/chat", methods=["POST"])

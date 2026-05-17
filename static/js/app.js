@@ -75,13 +75,13 @@
     '.js-send-outreach',
     (rowId) => `/send-outreach/${rowId}`,
     (row, data) => {
-      if (data.whatsapp_link) {
-        window.open(data.whatsapp_link, '_blank', 'noopener');
+      if (data.whatsapp_url) {
+        window.open(data.whatsapp_url, '_blank', 'noopener');
       }
       const cell = row.querySelector('.cell-outreach');
       cell.innerHTML = '';
       const link = document.createElement('a');
-      link.href = data.whatsapp_link;
+      link.href = data.whatsapp_url || '#';
       link.target = '_blank';
       link.rel = 'noopener';
       link.className = 'badge badge-done';
