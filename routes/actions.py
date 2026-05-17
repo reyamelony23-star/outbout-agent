@@ -95,8 +95,7 @@ def generate_deck_route(row: int):
     sheets.update_prospect(
         row,
         {
-            "Deck Generated": url,
-            "Deck Generated At": datetime.now(timezone.utc).date().isoformat(),
+            "Deck URL": url,
         },
     )
     return jsonify({"ok": True, "deck_url": url})
@@ -135,7 +134,7 @@ def send_outreach_route(row: int):
             {
                 "Status": "Contacted",
                 "WhatsApp Sent": today,
-                "Last Contacted": today,
+                "Outreach Date": today,
             },
         )
         return jsonify({"ok": True, "whatsapp_url": whatsapp_url, "message": message})

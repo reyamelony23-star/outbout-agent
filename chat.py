@@ -102,8 +102,7 @@ def _do_generate_deck(business_name: str, owner_email: str | None) -> dict:
     sheets.update_prospect(
         prospect["_row"],
         {
-            "Deck Generated": url,
-            "Deck Generated At": datetime.now(timezone.utc).date().isoformat(),
+            "Deck URL": url,
         },
     )
     import os as _os
@@ -136,14 +135,14 @@ def _whatsapp_one(prospect: dict) -> dict:
             "message": "",
             "note": f"{business_name}: no phone on file",
         }
-    deck_url = (prospect.get("Deck Generated") or "").strip()
+    deck_url = (prospect.get("Deck URL") or "").strip()
     link, message = build_whatsapp_link(prospect, deck_url=deck_url)
     sheets.update_prospect(
         prospect["_row"],
         {
             "Status": "Contacted",
             "WhatsApp Sent": datetime.now(timezone.utc).date().isoformat(),
-            "Last Contacted": datetime.now(timezone.utc).date().isoformat(),
+            "Outreach Date": datetime.now(timezone.utc).date().isoformat(),
         },
     )
     return {

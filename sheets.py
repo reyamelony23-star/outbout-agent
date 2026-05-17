@@ -42,16 +42,16 @@ PROSPECTS_HEADERS = [
     "Rating",
     "Review Count",
     "Lead Score",
-    "Search Query",
-    "Status",
-    "Deck Generated",
-    "Deck Generated At",
-    "WhatsApp Sent",
-    "Last Contacted",
-    "Owner Email",
-    "Notes",
     "Campaign",
+    "Deck URL",
+    "WhatsApp Sent",
+    "Status",
+    "Notes",
+    "Date Added",
+    "Outreach Date",
+    "Reply Received",
 ]
+print(f"[sheets] PROSPECTS_HEADERS count: {len(PROSPECTS_HEADERS)}")
 
 _client = None
 _spreadsheet = None
@@ -129,13 +129,30 @@ def _get_or_create_tab(name: str, headers: list[str]):
 
 
 def _ensure_headers_match(ws, headers: list[str]) -> None:
-    """Add any missing trailing headers to an existing tab (one-shot migration)."""
-    current = ws.row_values(1)
-    if current == headers:
+    """Update header cells in place, capped at the sheet's existing column count.
+
+    Never extends the grid — if the sheet has fewer columns than ``headers``,
+    we only write the columns that already exist and leave the rest alone.
+    Failures on individual cell writes are logged and skipped so a partial
+    header mismatch can't crash the whole app.
+    """
+    try:
+        current = ws.row_values(1)
+    except Exception as e:
+        print(f"[sheets] _ensure_headers_match: failed reading row 1: {e}")
         return
-    for idx, name in enumerate(headers, start=1):
-        if idx > len(current) or current[idx - 1] != name:
+    max_cols = getattr(ws, "col_count", len(headers)) or len(headers)
+    usable = headers[:max_cols]
+    if current[: len(usable)] == usable:
+        return
+    for idx, name in enumerate(usable, start=1):
+        if idx <= len(current) and current[idx - 1] == name:
+            continue
+        try:
             ws.update_cell(1, idx, name)
+        except Exception as e:
+            print(f"[sheets] _ensure_headers_match: skipped col {idx} ({name!r}): {e}")
+            continue
 
 
 def users_tab():
@@ -248,9 +265,6 @@ def list_prospects(owner_email: str | None = None, campaign: str | None = None) 
             stale = _cache.get("prospects")
             all_rows = stale[1] if stale is not None else []
     result = list(all_rows)
-    if owner_email:
-        target = owner_email.strip().lower()
-        result = [r for r in result if str(r.get("Owner Email", "")).strip().lower() == target]
     if campaign is not None:
         target = campaign.strip()
         result = [r for r in result if str(r.get("Campaign", "")).strip() == target]
@@ -274,6 +288,7 @@ def existing_prospect_names(owner_email: str | None = None) -> set[str]:
 
 
 def _row_for(p: dict, owner_email: str, campaign: str) -> list:
+    today = datetime.now(timezone.utc).date().isoformat()
     return [
         (p.get("name") or "").strip(),
         p.get("address", ""),
@@ -283,15 +298,14 @@ def _row_for(p: dict, owner_email: str, campaign: str) -> list:
         p.get("rating", ""),
         p.get("review_count", 0),
         p.get("lead_score", 0),
-        p.get("query", ""),
+        campaign,
+        "",
+        "",
         "New",
         "",
+        today,
         "",
         "",
-        "",
-        owner_email,
-        "",
-        campaign,
     ]
 
 
@@ -340,18 +354,25 @@ def append_prospects(
 def update_prospect(row_index: int, fields: dict) -> None:
     """Patch specific columns on a prospect row (1-based row_index, header is row 1)."""
     ws = prospects_tab()
+    max_cols = getattr(ws, "col_count", len(PROSPECTS_HEADERS)) or len(PROSPECTS_HEADERS)
     updates = []
     for key, value in fields.items():
         try:
             col = PROSPECTS_HEADERS.index(key) + 1
         except ValueError:
             continue
-        if key == "Deck Generated":
+        if col > max_cols:
+            print(f"[sheets] update_prospect: skipping {key!r}, col {col} exceeds sheet max {max_cols}")
+            continue
+        if key == "Deck URL":
             print(f"[sheets] writing deck URL to column {col} ({gspread.utils.rowcol_to_a1(row_index, col)})")
         updates.append({"range": gspread.utils.rowcol_to_a1(row_index, col), "values": [[value]]})
     if updates:
-        ws.batch_update(updates, value_input_option="USER_ENTERED")
-        _cache_invalidate("prospects")
+        try:
+            ws.batch_update(updates, value_input_option="USER_ENTERED")
+            _cache_invalidate("prospects")
+        except Exception as e:
+            print(f"[sheets] update_prospect: batch_update failed, skipping: {e}")
 
 
 def list_campaigns(owner_email: str | None = None) -> list[dict]:
@@ -375,12 +396,12 @@ def list_campaigns(owner_email: str | None = None) -> list[dict]:
             },
         )
         bucket["prospects"] += 1
-        if r.get("Deck Generated"):
+        if r.get("Deck URL"):
             bucket["decks"] += 1
         if (r.get("WhatsApp Sent") or "").strip():
             bucket["whatsapp_sent"] += 1
             bucket["contacted"] += 1
-        last = (r.get("WhatsApp Sent") or r.get("Deck Generated At") or "").strip()
+        last = (r.get("Outreach Date") or r.get("WhatsApp Sent") or "").strip()
         if last and last > bucket["date"]:
             bucket["date"] = last
         if not bucket["query"]:
@@ -392,7 +413,7 @@ def stats(owner_email: str | None = None) -> dict:
     rows = list_prospects(owner_email=owner_email)
     total = len(rows)
     whatsapp_sent = sum(1 for r in rows if (r.get("WhatsApp Sent") or "").strip())
-    decks_generated = sum(1 for r in rows if r.get("Deck Generated"))
+    decks_generated = sum(1 for r in rows if r.get("Deck URL"))
     replied = sum(1 for r in rows if str(r.get("Status", "")).lower() == "replied")
     response_rate = (replied / whatsapp_sent * 100) if whatsapp_sent else 0.0
     return {

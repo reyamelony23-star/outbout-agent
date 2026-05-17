@@ -59,8 +59,8 @@
           <td>{{ p['Rating'] or '—' }}</td>
           <td><span class="score-pill">{{ p['Lead Score'] or 0 }}</span></td>
           <td class="cell-deck">
-            {% if p['Deck Generated'] %}
-              <a class="badge badge-done" href="{{ p['Deck Generated'] }}" target="_blank" rel="noopener" style="text-decoration:none;">↗ Open Deck</a>
+            {% if p['Deck URL'] %}
+              <a class="badge badge-done" href="{{ p['Deck URL'] }}" target="_blank" rel="noopener" style="text-decoration:none;">↗ Open Deck</a>
             {% else %}
               <button class="btn btn-ghost btn-sm js-gen-deck">Generate Deck</button>
             {% endif %}
