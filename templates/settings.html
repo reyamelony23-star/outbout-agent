@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Settings — Moiboo{% endblock %}
+{% block content %}
+<header class="page-header">
+  <div>
+    <h1>Settings</h1>
+    <p class="page-sub">Account and integration overview.</p>
+  </div>
+</header>
+
+<section class="panel">
+  <h2>Account</h2>
+  <dl class="kv">
+    <dt>Name</dt><dd>{{ current_user.name }}</dd>
+    <dt>Email</dt><dd>{{ current_user.email }}</dd>
+    <dt>Role</dt><dd><span class="status status-new">{{ current_user.role }}</span></dd>
+  </dl>
+</section>
+
+<section class="panel">
+  <h2>Integrations</h2>
+  <ul class="integration-list">
+    <li><span>Google Sheets</span><span class="badge badge-done">✓ Connected</span></li>
+    <li><span>Apify · Google Maps scraper</span><span class="badge badge-done">✓ Connected</span></li>
+    <li><span>Gmail SMTP</span><span class="badge badge-done">✓ Connected</span></li>
+    <li><span>Anthropic Claude</span><span class="badge badge-done">✓ Connected</span></li>
+  </ul>
+  <p class="muted" style="margin-top:14px;">Edit API keys in <code>.env</code>, then restart the server.</p>
+</section>
+{% endblock %}

@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Sign in — Moiboo{% endblock %}
+{% block content %}
+<div class="login-shell">
+  <div class="login-card">
+    <div class="login-brand">
+      <span class="brand-mark">M</span>
+      <span class="brand-name" style="color: var(--ink);">Moiboo</span>
+    </div>
+    <h1>Welcome back</h1>
+    <p class="login-sub">Sign in to run your outbound pipeline.</p>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <div class="flash flash-{{ category }}">{{ message }}</div>
+      {% endfor %}
+    {% endwith %}
+    <form method="post" class="login-form">
+      <label>
+        Email
+        <input type="email" name="email" required autofocus placeholder="you@company.com">
+      </label>
+      <label>
+        Password
+        <input type="password" name="password" required placeholder="••••••••">
+      </label>
+      <button type="submit" class="btn btn-primary btn-block">Sign in →</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

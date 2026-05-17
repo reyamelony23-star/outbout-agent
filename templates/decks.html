@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Decks — Moiboo{% endblock %}
+{% block content %}
+<header class="page-header">
+  <div>
+    <h1>Decks</h1>
+    <p class="page-sub">{{ decks|length }} personalised pitch deck(s) ready to send.</p>
+  </div>
+</header>
+
+<section>
+  {% if decks %}
+  <div class="deck-grid">
+    {% for d in decks %}
+    <div class="deck-card">
+      <div class="deck-card-head">
+        <div class="deck-icon">▤</div>
+        <div style="min-width:0; flex:1;">
+          <h3 class="deck-card-title">{{ d.business_name }}</h3>
+          <div class="deck-card-meta">Generated {{ d.created_at }}</div>
+        </div>
+      </div>
+      <div class="deck-card-meta muted">
+        {{ '%.1f' % (d.size_kb) }} KB · HTML
+      </div>
+      <div class="deck-card-actions">
+        <a class="btn btn-primary btn-sm" href="{{ url_for('main.view_deck', filename=d.filename) }}" target="_blank" rel="noopener">↗ Open Deck</a>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="panel">
+    <p class="empty">No decks generated yet. Use <em>“Generate Deck”</em> on the Prospects page or ask Reybot.</p>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

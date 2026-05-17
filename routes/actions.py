@@ -1,0 +1,113 @@
+"""Actions blueprint — POST endpoints that mutate state.
+
+Endpoints:
+    POST /search                 → scrape + save
+    POST /generate-deck/<row>    → generate one deck
+    POST /send-outreach/<row>    → send one email
+    POST /chat                   → natural-language router
+"""
+
+from __future__ import annotations
+
+from datetime import datetime, timezone
+
+from flask import Blueprint, jsonify, request
+from flask_login import current_user, login_required
+
+import sheets
+from chat import handle_chat
+from config import DEFAULT_MAX_RESULTS
+from deck_generator import generate_deck
+from outreach import compose_email, send_email
+from scraper import scrape_prospects
+
+actions_bp = Blueprint("actions", __name__)
+
+
+def _scope_email():
+    if current_user.is_admin:
+        return None
+    return current_user.email
+
+
+@actions_bp.route("/search", methods=["POST"])
+@login_required
+def search():
+    payload = request.get_json(silent=True) or request.form
+    query = (payload.get("query") or "").strip()
+    if not query:
+        return jsonify({"ok": False, "error": "query is required"}), 400
+    try:
+        prospects = scrape_prospects(query, max_results=DEFAULT_MAX_RESULTS)
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"scraper failed: {e}"}), 500
+    added, skipped = sheets.append_prospects(prospects, owner_email=current_user.email)
+    return jsonify(
+        {"ok": True, "added": added, "skipped": skipped, "total_seen": len(prospects)}
+    )
+
+
+def _find_row(row_index: int):
+    for p in sheets.list_prospects(owner_email=_scope_email()):
+        if p["_row"] == row_index:
+            return p
+    return None
+
+
+@actions_bp.route("/generate-deck/<int:row>", methods=["POST"])
+@login_required
+def generate_deck_route(row: int):
+    prospect = _find_row(row)
+    if not prospect:
+        return jsonify({"ok": False, "error": "prospect not found"}), 404
+    try:
+        url = generate_deck(prospect)
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"deck generation failed: {e}"}), 500
+    sheets.update_prospect(row, {"Deck Generated": url})
+    return jsonify({"ok": True, "deck_url": url})
+
+
+@actions_bp.route("/send-outreach/<int:row>", methods=["POST"])
+@login_required
+def send_outreach_route(row: int):
+    prospect = _find_row(row)
+    if not prospect:
+        return jsonify({"ok": False, "error": "prospect not found"}), 404
+    to = (prospect.get("Email") or "").strip()
+    if not to:
+        return jsonify({"ok": False, "error": "no email address on file"}), 400
+    try:
+        subject, body = compose_email(prospect, sender_name=current_user.name.split()[0])
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"copy generation failed: {e}"}), 500
+    ok, msg = send_email(to, subject, body)
+    if not ok:
+        return jsonify({"ok": False, "error": msg}), 500
+    sheets.update_prospect(
+        row,
+        {
+            "Status": "Contacted",
+            "Last Contacted": datetime.now(timezone.utc).date().isoformat(),
+        },
+    )
+    return jsonify({"ok": True, "to": to, "subject": subject})
+
+
+@actions_bp.route("/chat", methods=["POST"])
+@login_required
+def chat():
+    try:
+        payload = request.get_json(silent=True) or {}
+        message = (payload.get("message") or "").strip()
+        if not message:
+            return jsonify({"ok": False, "error": "message is required"}), 400
+        result = handle_chat(
+            message=message,
+            owner_email=current_user.email,
+            sender_name=current_user.name.split()[0],
+            is_admin=current_user.is_admin,
+        )
+        return jsonify({"ok": True, **result})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500

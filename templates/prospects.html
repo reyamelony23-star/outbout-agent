@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Prospects — Moiboo{% endblock %}
+{% block content %}
+<header class="page-header">
+  <div>
+    <h1>Prospects</h1>
+    <p class="page-sub">{{ prospects|length }} record(s){% if not current_user.is_admin %} in your campaigns{% endif %}.</p>
+  </div>
+</header>
+
+<form id="search-form" class="search-bar">
+  <span class="search-icon">⌕</span>
+  <input id="search-input" type="text" name="query" placeholder="Find prospects in… (e.g. ‘yoga studios in Bali’)" autocomplete="off" required>
+  <button type="submit" class="btn btn-primary">✦ Run Search</button>
+</form>
+
+<section class="panel">
+  {% if prospects %}
+  <div class="table-scroll">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Business</th>
+          <th>Phone</th>
+          <th>Website</th>
+          <th>Rating</th>
+          <th>Lead Score</th>
+          <th>Deck</th>
+          <th>Outreach</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in prospects %}
+        <tr data-row="{{ p._row }}">
+          <td>
+            <div class="cell-business">
+              <div class="avatar-initials avatar-c{{ (loop.index0 % 6) + 1 }}">{{ (p['Business Name'] or '?')[0]|upper }}</div>
+              <div>
+                <div class="cell-business-name">{{ p['Business Name'] }}</div>
+                <span class="cell-business-sub">{{ p['Address'] }}</span>
+              </div>
+            </div>
+          </td>
+          <td class="muted">{{ p['Phone'] or '—' }}</td>
+          <td>
+            {% if p['Website'] %}<a href="{{ p['Website'] }}" target="_blank" rel="noopener">Visit ↗</a>{% else %}<span class="muted">—</span>{% endif %}
+          </td>
+          <td>{{ p['Rating'] or '—' }}</td>
+          <td><span class="score-pill">{{ p['Lead Score'] or 0 }}</span></td>
+          <td class="cell-deck">
+            {% if p['Deck Generated'] %}
+              <a class="badge badge-done" href="{{ p['Deck Generated'] }}" target="_blank" rel="noopener" style="text-decoration:none;">↗ Open Deck</a>
+            {% else %}
+              <button class="btn btn-ghost btn-sm js-gen-deck">Generate Deck</button>
+            {% endif %}
+          </td>
+          <td class="cell-outreach">
+            {% if (p['Status']|default('')|lower) in ['contacted','replied'] %}
+              <span class="badge badge-done">✓ Sent</span>
+            {% else %}
+              <button class="btn btn-ghost btn-sm js-send-outreach">Send Outreach</button>
+            {% endif %}
+          </td>
+          <td class="cell-status"><span class="status status-{{ (p['Status']|default('New'))|lower }}">{{ p['Status'] or 'New' }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="empty">No prospects yet. Run a search above to start your first campaign.</p>
+  {% endif %}
+</section>
+{% endblock %}

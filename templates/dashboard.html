@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Moiboo{% endblock %}
+{% block content %}
+<header class="page-header">
+  <div>
+    <h1>Dashboard</h1>
+    <p class="page-sub">Welcome back, {{ current_user.name }}. Here's your pipeline at a glance.</p>
+  </div>
+</header>
+
+<form id="search-form" class="search-bar">
+  <span class="search-icon">⌕</span>
+  <input id="search-input" type="text" name="query" placeholder="Search for prospects, e.g. ‘automotive workshops in Singapore’" autocomplete="off" required>
+  <button type="submit" class="btn btn-primary">✦ Run Search</button>
+</form>
+
+<section class="stat-grid">
+  <div class="stat-card stat-violet">
+    <div class="stat-head">
+      <div class="stat-label">Total Prospects</div>
+      <div class="stat-icon">👥</div>
+    </div>
+    <div class="stat-value">{{ stats.total_prospects }}</div>
+    <div class="stat-sub">All discovered leads</div>
+  </div>
+  <div class="stat-card stat-sky">
+    <div class="stat-head">
+      <div class="stat-label">Emails Sent</div>
+      <div class="stat-icon">✉</div>
+    </div>
+    <div class="stat-value">{{ stats.emails_sent }}</div>
+    <div class="stat-sub">Total outreach delivered</div>
+  </div>
+  <div class="stat-card stat-amber">
+    <div class="stat-head">
+      <div class="stat-label">Decks Generated</div>
+      <div class="stat-icon">▤</div>
+    </div>
+    <div class="stat-value">{{ stats.decks_generated }}</div>
+    <div class="stat-sub">Personalised pitch decks</div>
+  </div>
+  <div class="stat-card stat-emerald">
+    <div class="stat-head">
+      <div class="stat-label">Response Rate</div>
+      <div class="stat-icon">⤴</div>
+    </div>
+    <div class="stat-value">{{ stats.response_rate }}<span class="stat-unit">%</span></div>
+    <div class="stat-sub">Replies / sent</div>
+  </div>
+</section>
+
+<section class="panel">
+  <header class="panel-header">
+    <h2>Latest Prospects</h2>
+    <a class="link" href="{{ url_for('main.prospects') }}">View all →</a>
+  </header>
+  {% if recent %}
+  <table class="data-table">
+    <thead>
+      <tr><th>Business</th><th>Rating</th><th>Lead Score</th><th>Status</th></tr>
+    </thead>
+    <tbody>
+      {% for p in recent %}
+      <tr>
+        <td>
+          <div class="cell-business">
+            <div class="avatar-initials avatar-c{{ (loop.index0 % 6) + 1 }}">{{ (p['Business Name'] or '?')[0]|upper }}</div>
+            <div>
+              <div class="cell-business-name">{{ p['Business Name'] }}</div>
+              <span class="cell-business-sub">{{ p['Address'] }}</span>
+            </div>
+          </div>
+        </td>
+        <td>{{ p['Rating'] or '—' }}</td>
+        <td><span class="score-pill">{{ p['Lead Score'] or 0 }}</span></td>
+        <td><span class="status status-{{ (p['Status']|default('New'))|lower }}">{{ p['Status'] or 'New' }}</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">No prospects yet. Run a search above to get started.</p>
+  {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Campaigns — Moiboo{% endblock %}
+{% block content %}
+<header class="page-header">
+  <div>
+    <h1>Campaigns</h1>
+    <p class="page-sub">Pipelines grouped by search query.</p>
+  </div>
+</header>
+
+<section class="panel">
+  {% if campaigns %}
+  <table class="data-table">
+    <thead>
+      <tr><th>Query</th><th>Prospects</th><th>Contacted</th><th>Decks</th><th>Progress</th></tr>
+    </thead>
+    <tbody>
+      {% for c in campaigns %}
+      <tr>
+        <td>
+          <div class="cell-business">
+            <div class="avatar-initials avatar-c{{ (loop.index0 % 6) + 1 }}">{{ (c.query or '?')[0]|upper }}</div>
+            <div class="cell-business-name">{{ c.query }}</div>
+          </div>
+        </td>
+        <td>{{ c.total }}</td>
+        <td>{{ c.contacted }}</td>
+        <td>{{ c.decks }}</td>
+        <td>
+          {% set pct = (c.contacted / c.total * 100) | round(0, 'floor') if c.total else 0 %}
+          <span class="badge {% if pct >= 50 %}badge-done{% elif pct > 0 %}badge-warn{% else %}badge-info{% endif %}">{{ pct }}% contacted</span>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">No campaigns yet. Run a search from the dashboard.</p>
+  {% endif %}
+</section>
+{% endblock %}
